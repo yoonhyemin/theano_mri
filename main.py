@@ -5,12 +5,14 @@
 Stacked 3D-CAE for Alzheimer
 
 11-11-15 Ehsan Hosseini-Asl
+2021-02-10 Hyemin Yoon 
 
 """
 __author__ = 'ehsanh'
 
 import numpy as np
 import argparse
+import easydict
 import os
 import pickle
 import random
@@ -20,6 +22,7 @@ import scipy.io as sio
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classification_report, \
     roc_curve, auc, roc_auc_score
 from convnet_3d import CAE3d, stacked_CAE3d
+import nibabel as nib
 FLOAT_PRECISION = np.float32
 
 
@@ -177,7 +180,7 @@ def do_pretraining_cae(data_dir, models, cae_layer, max_epoch=1):
     num_batches = num_subjects/batch_size
     last_save = time.time()
     epoch = 0
-    print 'training CAE_'+str(cae_layer)
+    print('training CAE_'+str(cae_layer))
     while True:
         try:
             loss = 0
@@ -196,18 +199,18 @@ def do_pretraining_cae(data_dir, models, cae_layer, max_epoch=1):
                     cost = models[2].train(hidden_batch2)
                 loss += cost
                 train_time = time.time()-start
-                print 'batch:%02d\tcost:%.2f\ttime:%.2f' % (batch, cost, train_time/60.)
+                print('batch:%02d\tcost:%.2f\ttime:%.2f' %(batch, cost, train_time/60.))
                 sys.stdout.flush()
             epoch += 1
             if epoch % progress_report == 0:
-                print '%02d\t%g\t%f' % (epoch, loss, time.time()-start_time)
+                print('%02d\t%g\t%f' %(epoch, loss, time.time()-start_time))
                 sys.stdout.flush()
             if time.time() - last_save >= save_interval:
                 filename = 'cae'+str(cae_layer)\
                            +'_[act=%s,fn=%d,fs=%d].pkl'%\
                             (models[cae_layer-1].activation, models[cae_layer-1].flt_channels, models[cae_layer-1].flt_width)
                 models[cae_layer-1].save(filename)
-                print 'model saved to', filename
+                print('model saved to %s' %(filename))
                 sys.stdout.flush()
                 last_save = time.time()
             if epoch >= max_epoch-1:
@@ -215,7 +218,7 @@ def do_pretraining_cae(data_dir, models, cae_layer, max_epoch=1):
                            +'_[act=%s,fn=%d,fs=%d].pkl'%\
                             (models[cae_layer-1].activation, models[cae_layer-1].flt_channels, models[cae_layer-1].flt_width)
                 models[cae_layer-1].save(filename)
-                print 'max epoch reached. model saved to', filename
+                print('max epoch reached. model saved to %s' %(filename))
                 sys.stdout.flush()
                 return filename
 
@@ -225,7 +228,7 @@ def do_pretraining_cae(data_dir, models, cae_layer, max_epoch=1):
                        +'_[act=%s,fn=%d,fs=%d].pkl'%\
                         (models[cae_layer-1].activation, models[cae_layer-1].flt_channels, models[cae_layer-1].flt_width)
             models[cae_layer-1].save(filename)
-            print 'model saved to', filename
+            print('model saved to %s' %(filename))
             sys.stdout.flush()
             return filename
 
@@ -246,13 +249,13 @@ def finetune_scae(data_dir, model, binary_classification=(False, False, False, F
 
     if True not in binary_classification:
         filename = 'scae.pkl'
-        print 'training scae for AD_MCI_Normal'
+        print('training scae for AD_MCI_Normal')
     elif not MCI_Normal and not AM_N:
         filename = 'scae_%s.pkl'%('AD_Normal' if AD_Normal else 'AD_MCI')
-        print 'training scae for %s'%('AD_Normal' if AD_Normal else 'AD_MCI')
+        print('training scae for %s' %('AD_Normal' if AD_Normal else 'AD_MCI'))
     else:
         filename = 'scae_%s.pkl'%('MCI_Normal' if MCI_Normal else 'AM_N')
-        print 'training scae for %s'%('MCI_Normal' if MCI_Normal else 'AM_N')
+        print('training scae for %s' %('MCI_Normal' if MCI_Normal else 'AM_N'))
 
     while True:
         try:
@@ -280,10 +283,11 @@ def finetune_scae(data_dir, model, binary_classification=(False, False, False, F
                 batch_error, cost, pred, prob = model.train(batch_data, batch_labels)
                 loss_hist[batch] = cost
                 train_time = time.time()-start
-                print
+                print('')
                 error_hist[batch] = batch_error
-                print 'batch:%02d\terror:%.2f\tcost:%.2f\ttime:%.2f' % (batch, batch_error, cost, train_time/60.)
-                print 'subjects:\t',
+                print('batch:%02d\terror:%.2f\tcost:%.2f\ttime:%.2f' %(batch, batch_error, cost, train_time/60.))
+                '''
+                print('subjects:\t',
                 for name in batch_names:
                     print name[:-4],
                 print
@@ -300,24 +304,25 @@ def finetune_scae(data_dir, model, binary_classification=(False, False, False, F
                     print '%.2f'%p,
                 print
                 sys.stdout.flush()
+                '''
             epoch += 1
             if epoch % progress_report == 0:
-                print 'epoch:%02d\terror:%g\tloss:%g\ttime:%f' % (epoch, error_hist.mean(), loss_hist.mean(),
-                                                                  (time.time()-start_time)/60.)
+                print('epoch:%02d\terror:%g\tloss:%g\ttime:%f' %(epoch, error_hist.mean(), loss_hist.mean(),
+                                                                  (time.time()-start_time)/60.))
                 sys.stdout.flush()
             if time.time() - last_save >= save_interval:
                 model.save(filename)
-                print 'scae model saved to', filename
+                print('scae model saved to %s' %(filename))
                 sys.stdout.flush()
                 last_save = time.time()
             if epoch >= max_epoch-1:
                 model.save(filename)
-                print 'max epoch reached. scae model saved to', filename
+                print('max epoch reached. scae model saved to %s' %(filename))
                 sys.stdout.flush()
                 return filename
         except KeyboardInterrupt:
             model.save(filename)
-            print 'scae model saved to', filename
+            print('scae model saved to %s' %(filename))
             sys.stdout.flush()
             return filename
 
@@ -346,13 +351,13 @@ def finetune_scae_crossvalidate(data_dir, model,
         data_list_fold = [data for data in data_list if int(data[-6:-4])%5!=fold]
         if True not in binary_classification:
             filename = 'scae_fold%d.pkl'%(fold)
-            print 'training scae for AD_MCI_Normal'
+            print('training scae for AD_MCI_Normal')
         elif not MCI_Normal and not AM_N:
             filename = 'scae_%s_%d.pkl'%('AD_Normal' if AD_Normal else 'AD_MCI', fold)
-            print 'training scae for %s, fold %d'%('AD_Normal' if AD_Normal else 'AD_MCI', fold)
+            print('training scae for %s, fold %d' %('AD_Normal' if AD_Normal else 'AD_MCI', fold))
         else:
             filename = 'scae_%s_fold%d.pkl'%('MCI_Normal' if MCI_Normal else 'AM_N', fold)
-            print 'training scae for %s, fold %d'%('MCI_Normal' if MCI_Normal else 'AM_N', fold)
+            print('training scae for %s, fold %d' %('MCI_Normal' if MCI_Normal else 'AM_N', fold))
 
         error = 1
         while error>0.04:
@@ -381,9 +386,10 @@ def finetune_scae_crossvalidate(data_dir, model,
                     batch_error, cost, pred, prob = model.train(batch_data, batch_labels)
                     loss_hist[batch] = cost
                     train_time = time.time()-start
-                    print
+                    print('')
                     error_hist[batch] = batch_error
-                    print 'batch:%02d\terror:%.2f\tcost:%.2f\ttime:%.2f' % (batch, batch_error, cost, train_time/60.)
+                    print('batch:%02d\terror:%.2f\tcost:%.2f\ttime:%.2f' %(batch, batch_error, cost, train_time/60.))
+                    '''
                     print 'subjects:\t',
                     for name in batch_names:
                         print name[:-4],
@@ -401,25 +407,26 @@ def finetune_scae_crossvalidate(data_dir, model,
                         print '%.2f'%p,
                     print
                     sys.stdout.flush()
+                    '''
                 epoch += 1
                 error = error_hist.mean()
                 if epoch % progress_report == 0:
-                    print 'epoch:%02d\terror:%.2f\tloss:%.2f\ttime:%02d min' % (epoch, error_hist.mean(),
+                    print('epoch:%02d\terror:%.2f\tloss:%.2f\ttime:%02d min' %(epoch, error_hist.mean(),
                                                                                 loss_hist.mean(),
-                                                                                (time.time()-start_time)/60.)
+                                                                                (time.time()-start_time)/60.))
                     sys.stdout.flush()
                 if time.time() - last_save >= save_interval:
                     model.save(filename)
-                    print 'scae model fold %d saved to %s'% (fold, filename)
+                    print('scae model fold %d saved to %s' %(fold, filename))
                     sys.stdout.flush()
                     last_save = time.time()
             except KeyboardInterrupt:
                 model.save(filename)
-                print 'scae model fold %d saved to %s'% (fold, filename)
+                print('scae model fold %d saved to %s' %(fold, filename))
                 sys.stdout.flush()
                 continue
         model.save(filename)
-        print 'error threshold reached. scae model fold %d saved to %s' % (fold, filename)
+        print('error threshold reached. scae model fold %d saved to %s' %(fold, filename))
         sys.stdout.flush()
         continue
 
@@ -428,7 +435,7 @@ def get_hidden_data(dir, image_shape, models, layer):
     ''' print 'get hidden activation '''
     hidden_data = {}
     for type in ['AD', 'MCI', 'Normal']:
-        print 'get %s hidden activation' % type
+        print('get %s hidden activation' %type)
         data_dir = dir+type+'/'
         data_list = os.listdir(data_dir)
         data_list.sort()
@@ -452,7 +459,7 @@ def get_hidden_data(dir, image_shape, models, layer):
 
         hidden_data[type] = np.empty(hidden_shape, dtype=FLOAT_PRECISION)
         for batch in xrange(num_batches):
-            print batch
+            print(batch)
             batch_data, _, _ = load_batch(batch, num_batches, image_shape, data_dir, data_list=data_list)
             if layer == 1:
                 batch_hidden = models[layer-1].get_activation(batch_data)
@@ -474,7 +481,7 @@ def get_hidden_finetuned(dir, model, layer):
     ''' print 'get hidden activation '''
     hidden_data = {}
     for type in ['AD', 'MCI', 'Normal']:
-        print 'get %s hidden activation' % type
+        print('get %s hidden activation' %type)
         sys.stdout.flush()
         data_dir = dir+type+'/'
         data_list = os.listdir(data_dir)
@@ -511,7 +518,7 @@ def get_hidden_finetuned(dir, model, layer):
                 batch_hidden2 = model.layers[layer-2].get_activation(batch_hidden1)
                 batch_hidden = model.layers[layer-1].get_activation(batch_hidden2)
             forward_time = time.time()-start_time
-            print 'batch:%d\ttime: %.2f min' % (batch, forward_time/60.)
+            print('batch:%d\ttime: %.2f min' %(batch, forward_time/60.))
             hidden_data[type][batch*batch_size:(batch+1)*batch_size] = batch_hidden
             sys.stdout.flush()
         for i in xrange(10):
@@ -519,9 +526,10 @@ def get_hidden_finetuned(dir, model, layer):
             sio.savemat(filename, {'hidden_data':hidden_data[type][i*10:(i+1)*10]})
             sys.stdout.flush()
     return hidden_data
-
-
+ 
 def ProcessCommandLine():
+    default_image_dir = 'C:/Users/Administrator/Desktop/theano_py37/test/'
+
     parser = argparse.ArgumentParser(description='train scae on alzheimer')
     default_image_dir = 'ADNI_original/data/'
     parser.add_argument('-I', '--data_dir', default=default_image_dir,
@@ -563,6 +571,7 @@ def ProcessCommandLine():
     parser.add_argument('-batch', '--batchsize', type=int, default=1,
                         help='batch size')
     args = parser.parse_args()
+
     return args.data_dir, args.scae_model, args.cae1_model, args.cae2_model, args.cae3_model, args.activation_cae, \
            args.activation_final, \
            args.filter_channel, args.filter_size, args.pretrain_layer, args.get_hidden, args.test, \
@@ -578,13 +587,13 @@ def test_scae(data_dir, model, binary_classification=(False, False, False, False
         num_batches  +=1
     AD_Normal, AD_MCI, MCI_Normal, AM_N = binary_classification
     if True not in binary_classification:
-        print 'testing scae for AD_MCI_Normal'
+        print('testing scae for AD_MCI_Normal')
     elif not MCI_Normal and not AM_N:
-        print 'testing scae for %s'%('AD_Normal' if AD_Normal else 'AD_MCI')
+        print('testing scae for %s' %('AD_Normal' if AD_Normal else 'AD_MCI'))
         filename = 'test_%s.pkl'%('AD_Normal' if AD_Normal else 'AD_MCI')
     else:
         filename = 'test_%s.pkl'%('MCI_Normal' if MCI_Normal else 'AM_N')
-        print 'testing scae for %s'%('MCI_Normal' if MCI_Normal else 'AM_N')
+        print('testing scae for %s' %('MCI_Normal' if MCI_Normal else 'AM_N'))
     sys.stdout.flush()
 
     test_labels, test_names, test_pred, test_prob, test_label_prob= [], [], [], [], []
@@ -628,7 +637,8 @@ def test_scae(data_dir, model, binary_classification=(False, False, False, False
         for i, subject in enumerate(batch_names):
             sio.savemat('{0}_gradient.mat'.format(subject[:-4]), {'gradient':batch_gradient[i]})
 
-        print '\n\nbatch:%02d\terror:%.2f' % (batch, batch_error)
+        print('\n\nbatch:%02d\terror:%.2f' %(batch, batch_error))
+        '''
         print 'subjects:\t',
         for name in batch_names:
             print name[:-4],
@@ -646,14 +656,15 @@ def test_scae(data_dir, model, binary_classification=(False, False, False, False
             print '%.2f'%p,
         print
         sys.stdout.flush()
+        '''
 
     accuracy = accuracy_score(test_labels, test_pred)
     f_score = f1_score(np.asarray(test_labels), np.asarray(test_pred))
     confusion = confusion_matrix(np.asarray(test_labels), np.asarray(test_pred))
 
-    print '\n\nAccuracy:%.4f\tF1_Score:%.4f' % (accuracy, f_score)
-    print '\nconfusion:'
-    print confusion
+    print('\n\nAccuracy:%.4f\tF1_Score:%.4f' %(accuracy, f_score))
+    print('\nconfusion:')
+    print(confusion)
 
     if True not in binary_classification:
         class_names = ['AD', 'MCI', 'Normal']
@@ -672,8 +683,8 @@ def test_scae(data_dir, model, binary_classification=(False, False, False, False
         filename = 'test_AM_N.pkl'
 
     results_report = classification_report(test_labels, test_pred, target_names=class_names)
-    print '\nclassification report:'
-    print results_report
+    print('\nclassification report:')
+    print(results_report)
 
     results = (test_names, test_labels, test_label_prob, test_pred, test_prob,
                p_y_given_x, results_report, class_names)
@@ -698,13 +709,13 @@ def test_scae_crossvalidate(data_dir, model, binary_classification=(False, False
     for fold in xrange(5):
         data_list_fold = [data for data in data_list if int(data[-6:-4])%5==fold]
         if True not in binary_classification:
-            print 'testing scae for fold %d AD_MCI_Normal' % (fold)
+            print('testing scae for fold %d AD_MCI_Normal' %(fold))
         elif not MCI_Normal and not AM_N:
-            print 'testing scae for %s for fold %d'%('AD_Normal' if AD_Normal else 'AD_MCI', fold)
+            print('testing scae for %s for fold %d' %('AD_Normal' if AD_Normal else 'AD_MCI', fold))
             filename = 'scae_%s_fold%d.pkl'%('AD_Normal' if AD_Normal else 'AD_MCI', fold)
         else:
             filename = 'scae_%s_fold%d.pkl'%('MCI_Normal' if MCI_Normal else 'AM_N', fold)
-            print 'testing scae for %s for fold %d'%('MCI_Normal' if MCI_Normal else 'AM_N', fold)
+            print('testing scae for %s for fold %d' %('MCI_Normal' if MCI_Normal else 'AM_N', fold))
         model.load(filename)
         sys.stdout.flush()
 
@@ -745,7 +756,8 @@ def test_scae_crossvalidate(data_dir, model, binary_classification=(False, False
             ip2_feat[batch*batch_size:(batch+1)*batch_size, :] = batch_ip2_feat
             ip1_feat[batch*batch_size:(batch+1)*batch_size, :] = batch_ip1_feat
 
-            print '\n\nbatch:%02d\terror:%.2f' % (batch, batch_error)
+            print('\n\nbatch:%02d\terror:%.2f' %(batch, batch_error))
+            '''
             print 'subjects:\t',
             for name in batch_names:
                 print name[:-4],
@@ -763,14 +775,15 @@ def test_scae_crossvalidate(data_dir, model, binary_classification=(False, False
                 print '%.2f'%p,
             print
             sys.stdout.flush()
+            '''
 
         accuracy = accuracy_score(test_labels, test_pred)
         f_score = f1_score(np.asarray(test_labels), np.asarray(test_pred))
         confusion = confusion_matrix(np.asarray(test_labels), np.asarray(test_pred))
         computed_auc = roc_auc_score(test_labels, test_pred)
-        print '\n\nAccuracy:%.4f\tF1_Score:%.4f\tAUC:%.4f' % (accuracy, f_score, computed_auc)
-        print '\nconfusion:'
-        print confusion
+        print('\n\nAccuracy:%.4f\tF1_Score:%.4f\tAUC:%.4f' %(accuracy, f_score, computed_auc))
+        print('\nconfusion:')
+        print(confusion)
 
         if True not in binary_classification:
             class_names = ['AD', 'MCI', 'Normal']
@@ -789,30 +802,35 @@ def test_scae_crossvalidate(data_dir, model, binary_classification=(False, False
             filename = 'test_AM_N_fold{0}.pkl'.format(fold)
 
         results_report = classification_report(test_labels, test_pred, target_names=class_names)
-        print '\nclassification report:'
-        print results_report
+        print('\nclassification report:')
+        print(results_report)
 
         results = (test_names, test_labels, test_label_prob, test_pred, test_prob,
                    p_y_given_x, results_report, class_names)
 
         f = open(filename, 'wb')
         pickle.dump(results, f, -1)
-        f.close()
-
+        f.close()  
 
 def main():
     data_dir, scae_model, cae1_model, cae2_model, cae3_model, activation_cae, activation_final, \
     flt_channels, flt_size, pretrain_layer, get_hidden, test, finetune, AD_Normal, AD_MCI, MCI_Normal, AM_N, load_conv, batchsize = \
         ProcessCommandLine()
     binary = (AD_Normal, AD_MCI, MCI_Normal, AM_N)
-    print 'cae activation:', activation_cae
-    print 'final layers activation:', activation_final
-    print 'filter channels:', flt_channels
-    print 'filter size:', flt_size
+    print('cae activation:%s' %(activation_cae))
+    print('final layers activation:%s' %(activation_final))
+    print('filter channels:%s' %(flt_channels))
+    print('filter size:%s' %(flt_size))
     sys.stdout.flush()
     data_list = os.listdir(data_dir)
-    sample = sio.loadmat(data_dir+data_list[0])
-    depth, height, width = sample['original'].shape
+    
+    #sample = sio.loadmat(data_dir+data_list[0])
+    sample = nib.load(data_dir+data_list[0])
+    sample = sample.get_fdata()
+
+    #depth, height, width = sample.shape
+    height, width, depth = sample.shape
+    
     in_channels   = 1
     in_time       = depth
     in_width      = width
@@ -831,7 +849,7 @@ def main():
                      filter_shape=filter_shp_1,
                      poolsize=(2, 2, 2),
                      activation=activation_cae)
-        print 'CAE1 built'
+        print('CAE1 built')
         if cae1_model:
             cae1.load(cae1_model)
         sys.stdout.flush()
@@ -840,7 +858,7 @@ def main():
                      filter_shape=filter_shp_2,
                      poolsize=(2, 2, 2),
                      activation=activation_cae)
-        print 'CAE2 built'
+        print('CAE2 built')
         if cae2_model:
             cae2.load(cae2_model)
         sys.stdout.flush()
@@ -849,7 +867,7 @@ def main():
                      filter_shape=filter_shp_3,
                      poolsize=(2, 2, 2),
                      activation=activation_cae)
-        print 'CAE3 built'
+        print('CAE3 built')
         if cae3_model:
             cae3.load(cae3_model)
         sys.stdout.flush()
@@ -861,9 +879,9 @@ def main():
                                cae_layer=pretrain_layer,
                                max_epoch=100)
 
-
+'''
     elif finetune or test or get_hidden:
-        print 'creating scae...'
+        print('creating scae...')
         sys.stdout.flush()
         if True not in binary:
             scae = stacked_CAE3d(image_shape=image_shp,
@@ -880,7 +898,7 @@ def main():
                                  activation_final=activation_final,
                                  hidden_size=(2000, 500, 200, 20, 2))
 
-        print 'scae model built'
+        print('scae model built')
         sys.stdout.flush()
         if cae1_model:
             scae.load_cae(cae1_model, cae_layer=0)
@@ -920,8 +938,9 @@ def main():
             get_hidden_finetuned(dir=data_dir,
                                  model=scae,
                                  layer=get_hidden)
-
+'''
 
 if __name__ == '__main__':
-    sys.exit(main())
+    #sys.exit(main())
+    main()
 
