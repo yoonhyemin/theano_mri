@@ -1,5 +1,8 @@
 # theano_mri
 
+###sogang hyemin file download link
+https://drive.google.com/drive/folders/1dGsQxV7lbPwg2dugo36BnCPrTBt8dTca?usp=sharing
+
 Alzheimer Disease Diagnosis by Deeply Supervised 3D Convolutional Network
 
 ###Reference github
