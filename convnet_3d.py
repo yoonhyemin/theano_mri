@@ -5,19 +5,24 @@
 Stacked 3D-CAE for Alzheimer
 
 11-11-15 Ehsan Hosseini-Asl
-
+2021-02-10 Hyemin
 """
-__author__ = 'ehsanh'
+__author__ = 'hyemin'
 
 import numpy as np
 import pickle
-import maxpool3d
 import theano
 import theano.tensor as T
 from theano.tensor import nnet
-from theano.tensor.signal import downsample
-import conv3d2d
-from itertools import izip
+#from theano.tensor.signal import downsample -> convert pool_2d 
+#from theano.tensor.signal.pool import pool_2d
+
+#import maxpool3d -> convert theano.tensor.signal.pool.pool_3d
+#import conv3d2d -> convert theano.tensor.nnet.conv3d
+
+#from itertools import izip
+from itertools import zip_longest
+
 
 FLOAT_PRECISION = np.float32
 
@@ -27,20 +32,16 @@ def adadelta_updates(parameters, gradients, rho, eps):
     # ipdb.set_trace()
     gradients_sq = [ theano.shared(np.zeros(p.get_value().shape, dtype=FLOAT_PRECISION),) for p in parameters ]
     deltas_sq = [ theano.shared(np.zeros(p.get_value().shape, dtype=FLOAT_PRECISION)) for p in parameters ]
-
     # calculates the new "average" delta for the next iteration
-    gradients_sq_new = [ rho*g_sq + (1-rho)*(g**2) for g_sq,g in izip(gradients_sq,gradients) ]
-
+    gradients_sq_new = [ rho*g_sq + (1-rho)*(g**2) for g_sq,g in zip_longest(gradients_sq,gradients) ]
     # calculates the step in direction. The square root is an approximation to getting the RMS for the average value
-    deltas = [ (T.sqrt(d_sq+eps)/T.sqrt(g_sq+eps))*grad for d_sq,g_sq,grad in izip(deltas_sq,gradients_sq_new,gradients) ]
-
+    deltas = [ (T.sqrt(d_sq+eps)/T.sqrt(g_sq+eps))*grad for d_sq,g_sq,grad in zip_longest(deltas_sq,gradients_sq_new,gradients) ]
     # calculates the new "average" deltas for the next step.
-    deltas_sq_new = [ rho*d_sq + (1-rho)*(d**2) for d_sq,d in izip(deltas_sq,deltas) ]
-
+    deltas_sq_new = [ rho*d_sq + (1-rho)*(d**2) for d_sq,d in zip_longest(deltas_sq,deltas) ]
     # Prepare it as a list f
-    gradient_sq_updates = zip(gradients_sq,gradients_sq_new)
-    deltas_sq_updates = zip(deltas_sq,deltas_sq_new)
-    parameters_updates = [ (p,p - d) for p,d in izip(parameters,deltas) ]
+    gradient_sq_updates = list(zip(gradients_sq,gradients_sq_new))
+    deltas_sq_updates = list(zip(deltas_sq,deltas_sq_new))
+    parameters_updates = [ (p,p - d) for p,d in zip_longest(parameters,deltas) ]
     # ipdb.set_trace()
     return gradient_sq_updates + deltas_sq_updates + parameters_updates
     # return parameters_updates
@@ -92,7 +93,7 @@ class ConvolutionLayer3D(object):
             self.b_delta = theano.shared(value=b_values, borrow=True)
 
         # convolution
-        conv_out = conv3d2d.conv3d(
+        conv_out = theano.tensor.nnet.conv3d2d.conv3d(
             signals=input,
             filters=self.W,
             signals_shape=signal_shape,
@@ -102,14 +103,14 @@ class ConvolutionLayer3D(object):
         #if poolsize:
         if if_pool:
             conv_out = conv_out.dimshuffle(0,2,1,3,4) #maxpool3d works on last 3 dimesnions
-            pooled_out = maxpool3d.max_pool_3d(
+            pooled_out = theano.tensor.signal.pool.pool_3d(
                 input=conv_out,
                 ds=poolsize,
                 ignore_border=True)
             tmp_out = pooled_out.dimshuffle(0,2,1,3,4)
             tmp = tmp_out + self.b.dimshuffle('x', 'x', 0, 'x', 'x')
         elif if_hidden_pool:
-            pooled_out = downsample.max_pool_2d(
+            pooled_out = theano.tensor.signal.pool.pool_3d(
                 input=conv_out,
                 ds=poolsize[:2],
                 st=stride,
@@ -305,9 +306,9 @@ class softmaxLayer(object):
 
 class CAE3d(object):
     def __init__(self, signal_shape, filter_shape, poolsize, activation=None):
-        rng = np.random.RandomState(None)
-        dtensor5 = T.TensorType('float32', (False,)*5)
-        self.inputs = dtensor5(name='inputs')
+        rng = np.random.RandomState(None) 
+        dtensor5 = T.TensorType('float32', (False,)*5) 
+        self.inputs = dtensor5(name='inputs') #Return a Variable for a 5-dimensional ndarray
         self.image_shape = signal_shape
         self.batchsize = signal_shape[0]
         self.in_channels   = signal_shape[2]
@@ -326,7 +327,7 @@ class CAE3d(object):
                                              filter_shape=filter_shape,
                                              act=activation,
                                              border_mode='full',
-                                             if_hidden_pool=False)
+                                             if_hidden_pool=False)                                         
 
         self.hidden_image_shape = (self.batchsize,
                                    self.in_depth,
@@ -364,7 +365,7 @@ class CAE3d(object):
         name = "train cae model"
         )
 
-        self.activation = maxpool3d.max_pool_3d(
+        self.activation = theano.tensor.signal.pool.pool_3d(
                 input=self.hidden_layer.output.dimshuffle(0,2,1,3,4),
                 ds=poolsize,
                 ignore_border=True)
@@ -387,7 +388,7 @@ class CAE3d(object):
         for layer in self.layers:
             layer.set_state(pickle.load(f))
         f.close()
-        print 'cae model loaded from', filename
+        print ('cae model loaded from %s' %(filename))
 
 
 class stacked_CAE3d(object):
@@ -526,7 +527,7 @@ class stacked_CAE3d(object):
     def load_cae(self, filename, cae_layer):
         f = open(filename)
         self.layers[cae_layer].set_state(pickle.load(f))
-        print 'cae %d loaded from %s' % (cae_layer, filename)
+        print('cae %d loaded from %s' %(cae_layer, filename))
 
     def save(self, filename):
         f = open(filename, 'w')
@@ -539,27 +540,27 @@ class stacked_CAE3d(object):
         for l in self.layers:
             l.set_state(pickle.load(f))
         f.close()
-        print 'model loaded from', filename
+        print ('model loaded from %s' %(filename))
 
     def load_binary(self, filename):
         f = open(filename)
         for l in self.layers[:-1]:
             l.set_state(pickle.load(f))
         f.close()
-        print 'model loaded from', filename
+        print ('model loaded from %s' %(filename))
 
     def load_conv(self, filename):
         f = open(filename)
         for l in self.layers[:3]:
             l.set_state(pickle.load(f))
         f.close()
-        print 'model conv layers loaded from', filename
+        print('model conv layers loaded from %s' %(filename))
 
     def load_fc(self, filename):
         f = open(filename)
         for l in self.layers[-3:]:
             l.set_state(pickle.load(f))
         f.close()
-        print 'model fc layers loaded from', filename
+        print('model fc layers loaded from %s' %(filename))
 
 
